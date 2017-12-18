@@ -1,0 +1,58 @@
+import requests,re,pymongo
+from pyquery import PyQuery as pq
+from multiprocessing import Pool
+
+def get_index(url,params):
+    res = requests.get(url = url,params=params).json()
+    print(res)
+    for item in res['subjects']:
+        # print(item['url'])
+        yield item['url']
+
+def parse_details(url):
+    res = requests.get(url).text
+    doc = pq(res)
+    data = {}
+    data['movie'] = doc('h1 span:first-child').text()
+    data['year'] = doc('h1 span:nth-child(2)').text()[1:-1]
+    data['director'] = doc('#info > span:nth-child(1) > span.attrs > a').text()
+    data['writers'] = doc('#info > span:nth-child(3) > span.attrs > a').text()
+    data['actors'] = doc('#info > span.actor').text()[4:]
+    data['type'] = doc('#info [property="v:genre"]').text()
+    data['country'] = re.findall('制片国家/地区:</span>(.*?)<br', res, re.S)[0]
+    data['language'] = re.findall('语言:</span>(.*?)<br', res, re.S)[0]
+    data['date'] = doc('#info [property="v:initialReleaseDate"]').text()
+    data['length'] = doc('#info [property="v:runtime"]').text()
+    data['grades'] = doc('#interest_sectl > div.rating_wrap.clearbox > div.rating_self.clearfix > strong').text()
+    data['five_stars'] = doc(
+        '#interest_sectl > div.rating_wrap.clearbox > div.ratings-on-weight > div:nth-child(1) > span.rating_per').text()
+    data['four_stars'] = doc(
+        '#interest_sectl > div.rating_wrap.clearbox > div.ratings-on-weight > div:nth-child(2) > span.rating_per').text()
+    data['three_stars'] = doc(
+        '#interest_sectl > div.rating_wrap.clearbox > div.ratings-on-weight > div:nth-child(3) > span.rating_per').text()
+    data['two_stars'] = doc(
+        '#interest_sectl > div.rating_wrap.clearbox > div.ratings-on-weight > div:nth-child(4) > span.rating_per').text()
+    data['one_star'] = doc(
+        '#interest_sectl > div.rating_wrap.clearbox > div.ratings-on-weight > div:nth-child(5) > span.rating_per').text()
+    return data
+
+def save_to_mongo(data):
+    client = pymongo.MongoClient('localhost')
+    db = client['douban']
+    if db['movie'].insert(data):
+        print('save to mongo:'+str(data))
+
+def main(page):
+    url = 'https://movie.douban.com/j/search_subjects'
+    print(page)
+    params = {'type': 'movie', 'tag': '豆瓣高分', 'sort': 'recommend', 'page_limit': 20, 'page_start': page}
+    for item in get_index(url,params):
+        data = parse_details(item)
+        save_to_mongo(data)
+
+if __name__ == '__main__':
+    pool = Pool()
+    groups = ([x for x in range(0,500,20)])
+    pool.map(main,groups)
+    pool.close()
+    pool.join()
