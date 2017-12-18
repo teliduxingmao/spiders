@@ -1,0 +1,5 @@
+CITY = '广州'
+KEYWORD = 'python'
+MONGO_URI = 'localhost'
+MONGO_DB = 'bosszhipin'
+MONGO_TB = 'guangzhou_python'

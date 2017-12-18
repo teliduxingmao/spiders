@@ -1,0 +1,4 @@
+url = "http://maoyan.com/board/4?offset="
+a = 0
+url = url + str(a)
+print(url)
